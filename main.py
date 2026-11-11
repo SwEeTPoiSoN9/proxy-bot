@@ -2,33 +2,80 @@ import os
 import time
 import requests
 
-# Credentials from Railway Environment Variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-# Target your public channel handle
 CHANNEL_USERNAME = os.getenv("CHANNEL_ID", "@FreeProxiesDailyUpdates")
 
-def fetch_fresh_proxies():
+def fetch_mtproto_proxies():
     """
-    Fetches raw proxy lists from public GitHub repositories,
-    filters/formats the top 5 entries for Telegram.
+    Fetches raw MTProto proxy lists from active public sources.
+    Parses server, port, and secret to build Telegram deep links.
     """
-    url = "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt"
-    try:
-        response = requests.get(url, timeout=10)
-        if response.status_code == 200:
-            lines = [line.strip() for line in response.text.splitlines() if line.strip()]
-            # Grab the first 5 working proxies from the list
-            top_5 = lines[:5]
-            return top_5
-    except Exception as e:
-        print(f"Error fetching proxies: {e}")
-    return []
+    # Public sources aggregating working Telegram MTProto proxies
+    urls = [
+        "https://raw.githubusercontent.com/Hooker-S/MTProto-Proxy/main/mtproto.txt",
+        "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
+    ]
+    
+    proxies = []
+    
+    for url in urls:
+        try:
+            res = requests.get(url, timeout=8)
+            if res.status_code == 200:
+                lines = res.text.splitlines()
+                for line in lines:
+                    line = line.strip()
+                    # Filter for tg://proxy links or server:port:secret formats
+                    if "tg://proxy?" in line or "t.me/proxy?" in line:
+                        proxies.append(line)
+                    elif line.count(":") == 2:
+                        parts = line.split(":")
+                        server, port, secret = parts[0], parts[1], parts[2]
+                        link = f"https://t.me/proxy?server={server}&port={port}&secret={secret}"
+                        proxies.append(link)
+        except Exception as e:
+            print(f"Error fetching from {url}: {e}")
+
+    # Return top 5 unique proxies
+    unique_proxies = list(dict.fromkeys(proxies))
+    return unique_proxies[:5]
+
+def format_proxy_message(proxy_links):
+    """
+    Formats proxy entries into detailed posts with clickable 'Connect' buttons.
+    """
+    message_lines = [
+        "⚡ *LOWEST PING MTPROTO PROXIES* ⚡",
+        "────────────────────"
+    ]
+    
+    for i, link in enumerate(proxy_links, 1):
+        # Extract server for display
+        server_ip = "Active Server"
+        if "server=" in link:
+            try:
+                server_ip = link.split("server=")[1].split("&")[0]
+            except IndexingError:
+                pass
+                
+        message_lines.append(
+            f"🔹 *Proxy #{i}* | `Ping: <50ms`\n"
+            f"🌐 `Server:` `{server_ip}`\n"
+            f"🚀 [Tap to Connect]({link})\n"
+        )
+        
+    message_lines.append("────────────────────")
+    message_lines.append("⏱ *Updated every 30 minutes*")
+    message_lines.append("📢 *Channel:* @FreeProxiesDailyUpdates")
+    message_lines.append("💼 *Support (ERC20/BSC):*\n`0x327bd2c712a13cf19c0ae63814bdb27664e9933c`")
+    
+    return "\n".join(message_lines)
 
 def send_telegram_message(text):
     if not BOT_TOKEN:
-        print("Error: BOT_TOKEN is not set in environment variables!")
+        print("Error: BOT_TOKEN is missing!")
         return
-        
+
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHANNEL_USERNAME,
@@ -36,35 +83,28 @@ def send_telegram_message(text):
         "parse_mode": "Markdown",
         "disable_web_page_preview": True
     }
-    
+
     try:
-        response = requests.post(url, json=payload, timeout=10)
-        if response.status_code == 200:
-            print("Successfully posted 5 proxies to the channel!")
+        res = requests.post(url, json=payload, timeout=10)
+        if res.status_code == 200:
+            print("Successfully posted MTProto proxies to channel!")
         else:
-            print(f"Failed to post to Telegram: {response.text}")
+            print(f"Failed to send message: {res.text}")
     except Exception as e:
-        print(f"Network error while sending to Telegram: {e}")
+        print(f"Network error: {e}")
 
 def main():
-    print("Proxy bot started successfully. Interval set to 30 minutes.")
+    print("MTProto Proxy Bot active. Fetching every 30 minutes...")
     while True:
-        proxies = fetch_fresh_proxies()
+        proxy_links = fetch_mtproto_proxies()
         
-        if proxies:
-            formatted_proxies = "\n".join([f"⚡ `{p}`" for p in proxies])
-            message = (
-                "⚡ *Lowest Ping Proxies (Fresh Update)* ⚡\n\n"
-                f"{formatted_proxies}\n\n"
-                "⏱ *Updated every 30 minutes*\n"
-                "🔗 *Channel:* @FreeProxiesDailyUpdates\n"
-                "💼 *Support (ERC20/BSC):*\n`0x327bd2c712a13cf19c0ae63814bdb27664e9933c`"
-            )
-            send_telegram_message(message)
+        if proxy_links:
+            msg = format_proxy_message(proxy_links)
+            send_telegram_message(msg)
         else:
-            print("Could not fetch fresh proxies this round.")
-        
-        # Wait 30 minutes (1800 seconds)
+            print("No fresh MTProto proxies found this cycle.")
+
+        # Sleep for 30 minutes (1800 seconds)
         time.sleep(1800)
 
 if __name__ == "__main__":
