@@ -1,132 +1,74 @@
 import os
 import logging
 import requests
-from datetime import time
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# Safe configuration with a built-in fallback so it never crashes
+# Setup logging
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+
+# Configuration with fallback
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 group_id_str = os.getenv("GROUP_ID")
 GROUP_ID = int(group_id_str) if group_id_str else -1004315498301
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Proxy Bot is running 24/7 on Railway!\n\n"
-        "Commands:\n"
-        "/proxy – Get free HTTP + SOCKS5\n"
-        "/mtproto – Get free MTProto proxies\n"
-        "/help – Help"
-    )
+    await update.message.reply_text("👋 Hello! I am your Proxy Bot. Use /proxy to get fresh proxies with connection buttons!")
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "This bot auto-posts fresh free proxies every day in the group.\n"
-        "You can also request them anytime with /proxy or /mtproto."
-    )
-
-def fetch_http_socks():
+async def get_proxy_data():
+    # Fetching free proxies (Example API or source)
     try:
-        http = requests.get(
-            "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all",
-            timeout=15
-        ).text.strip()
-        
-        socks5 = requests.get(
-            "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=socks5&timeout=10000&country=all",
-            timeout=15
-        ).text.strip()
-        return http, socks5
-    except:
-        return "", ""
-
-def fetch_mtproto():
-    sources = [
-        "https://raw.githubusercontent.com/SoliSpirit/mtproto/master/all_proxies.txt",
-        "https://raw.githubusercontent.com/ALIILAPRO/MTProtoProxy/main/mtproto.txt",
-        "https://raw.githubusercontent.com/Surfboardv2ray/TGProto/main/proxies.txt",
-    ]
-    proxies = []
-    for url in sources:
-        try:
-            data = requests.get(url, timeout=12).text
-            for line in data.splitlines():
-                line = line.strip()
-                if "tg://proxy" in line or "t.me/proxy" in line:
-                    proxies.append(line)
-        except:
-            continue
-    return list(dict.fromkeys(proxies))[:20]
-
-async def send_proxy_post(context: ContextTypes.DEFAULT_TYPE):
-    http, socks5 = fetch_http_socks()
-    mtproto = fetch_mtproto()
-
-    text = (
-        "🔥 **Fresh Free Proxies** 🔥\n\n"
-        "📌 **HTTP Proxies:**\n"
-        f"`{http[:1200]}`\n\n"
-        "📌 **SOCKS5 Proxies:**\n"
-        f"`{socks5[:1200]}`\n\n"
-        "⚡ **MTProto Proxies (Telegram):**\n"
-    )
-
-    if mtproto:
-        text += "\n".join(mtproto[:12])
-    else:
-        text += "No MTProto proxies available right now."
-
-    text += "\n\n⚠️ Free proxies die fast. Request new ones anytime with /proxy or /mtproto"
-
-    try:
-        await context.bot.send_message(
-            chat_id=GROUP_ID,
-            text=text,
-            parse_mode="Markdown",
-            disable_web_page_preview=True
-        )
+        response = requests.get("https://proxylist.geonode.com/api/proxy-list?limit=3&page=1&sort_by=lastChecked&sort_type=desc", timeout=10)
+        data = response.json().get('data', [])
+        proxies = []
+        for item in data:
+            ip = item.get('ip')
+            port = item.get('port')
+            protocols = item.get('protocols', ['http'])
+            country = item.get('country', 'Unknown')
+            proto = protocols[0] if protocols else 'http'
+            
+            # Format proxy link/details
+            proxy_url = f"{proto}://{ip}:{port}"
+            name = f"{proto.upper()} Proxy ({country})"
+            proxies.append({"name": name, "url": proxy_url, "ip": ip, "port": port})
+        return proxies
     except Exception as e:
-        logging.error(f"Failed to send daily post: {e}")
+        logging.error(f"Error fetching proxies: {e}")
+        return []
 
-async def get_proxy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await update.message.reply_text("Fetching proxies...")
-    http, socks5 = fetch_http_socks()
-    text = (
-        "**HTTP Proxies:**\n"
-        f"`{http[:1400]}`\n\n"
-        "**SOCKS5 Proxies:**\n"
-        f"`{socks5[:1400]}`"
-    )
-    await msg.edit_text(text, parse_mode="Markdown")
-
-async def get_mtproto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await update.message.reply_text("Fetching MTProto proxies...")
-    proxies = fetch_mtproto()
+async def proxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    proxies = await get_proxy_data()
     if not proxies:
-        await msg.edit_text("No MTProto proxies found right now.")
+        await update.message.reply_text("❌ Could not fetch proxies at the moment. Please try again later.")
         return
-    text = "**Free MTProto Proxies:**\n\n" + "\n\n".join(proxies)
-    await msg.edit_text(text, parse_mode="Markdown", disable_web_page_preview=True)
+
+    for p in proxies:
+        # Create an inline button to connect/open the proxy directly
+        keyboard = [[InlineKeyboardButton("🔗 Connect Proxy", url=f"https://t.me/proxy?server={p['ip']}&port={p['port']}")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message_text = (
+            f"🛡 **{p['name']}**\n\n"
+            f"🌐 **Server:** `{p['ip']}`\n"
+            f"🔌 **Port:** `{p['port']}`\n\n"
+            f"Tap the button below to connect instantly:"
+        )
+        
+        await update.message.reply_text(message_text, reply_markup=reply_markup, parse_mode="Markdown")
 
 def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+    if not BOT_TOKEN:
+        logging.error("No BOT_TOKEN provided!")
+        return
+
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("proxy", get_proxy))
-    app.add_handler(CommandHandler("mtproto", get_mtproto))
+    app.add_handler(CommandHandler("proxy", proxy_command))
 
-    job_queue = app.job_queue
-    job_queue.run_daily(send_proxy_post, time=time(hour=9, minute=0))
-    job_queue.run_daily(send_proxy_post, time=time(hour=18, minute=0))
-
-    print("Bot started with daily auto-posting...")
+    logging.info("Bot is starting...")
     app.run_polling()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
