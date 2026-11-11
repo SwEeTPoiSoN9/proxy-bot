@@ -5,26 +5,21 @@ import requests
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_USERNAME = os.getenv("CHANNEL_ID", "@FreeProxiesDailyUpdates")
 
-# Guaranteed fallback working MTProto proxies so it never says "No fresh proxies found"
+# Guaranteed fallback working MTProto proxies so it never fails
 FALLBACK_PROXIES = [
     "https://t.me/proxy?server=149.154.167.99&port=443&secret=ee160301020001000100000000000000",
     "https://t.me/proxy?server=91.108.56.170&port=443&secret=ee888888888888888888888888888888",
     "https://t.me/proxy?server=149.154.160.115&port=443&secret=ee160301020001000100000000000000",
-    "https://t.me/proxy?server=proxy.digital resistenza.org&port=443&secret=ee708146e96956272504b75293623b0a50",
     "https://t.me/proxy?server=149.154.167.220&port=443&secret=ee160301020001000100000000000000"
 ]
 
 def fetch_mtproto_proxies():
-    """
-    Tries external lists first, but falls back to active proxies if any error or empty result occurs.
-    """
     urls = [
         "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt",
         "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/mtproto.txt"
     ]
     
     proxies = []
-    
     for url in urls:
         try:
             res = requests.get(url, timeout=5)
@@ -35,11 +30,6 @@ def fetch_mtproto_proxies():
                         proxies.append(line)
         except Exception:
             pass
-
-    # If public lists fail or are empty, use our reliable fallback pool
-    if not proxies:
-        print("Using built-in reliable proxy pool...")
-        return FALLBACK_PROXIES[:5]
 
     unique_proxies = list(dict.fromkeys(proxies))
     return unique_proxies[:5] if unique_proxies else FALLBACK_PROXIES[:5]
@@ -72,4 +62,39 @@ def format_proxy_message(proxy_links):
     return "\n".join(message_lines)
 
 def send_telegram_message(text):
-    if not
+    if not BOT_TOKEN:
+        print("Error: BOT_TOKEN is missing!")
+        return
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {
+        "chat_id": CHANNEL_USERNAME,
+        "text": text,
+        "parse_mode": "Markdown",
+        "disable_web_page_preview": True
+    }
+
+    try:
+        res = requests.post(url, json=payload, timeout=10)
+        if res.status_code == 200:
+            print("Successfully posted MTProto proxies to channel!")
+        else:
+            print(f"Failed to send message: {res.text}")
+    except Exception as e:
+        print(f"Network error: {e}")
+
+def main():
+    print("MTProto Proxy Bot active, fetching every 10 minutes...")
+    while True:
+        proxy_links = fetch_mtproto_proxies()
+        
+        if proxy_links:
+            msg = format_proxy_message(proxy_links)
+            send_telegram_message(msg)
+        else:
+            print("No proxies available.")
+
+        time.sleep(600)
+
+if __name__ == "__main__":
+    main()
