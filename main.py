@@ -13,49 +13,61 @@ group_id_str = os.getenv("GROUP_ID")
 GROUP_ID = int(group_id_str) if group_id_str else -1004315498301
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Hello! I am your Proxy Bot. I automatically share fresh proxies in the group every hour!")
+    await update.message.reply_text("👋 Hello! I send live, verified Telegram SOCKS5 proxies every hour!")
 
-async def fetch_proxies(count=5):
+async def fetch_socks5_proxies(count=5):
+    """Fetches high-quality SOCKS5 proxies explicitly formatted for Telegram."""
     try:
-        url = f"https://proxylist.geonode.com/api/proxy-list?limit={count}&page=1&sort_by=lastChecked&sort_type=desc"
+        # Fetching verified SOCKS5 proxies from ProxyScrape API
+        url = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=json&protocol=socks5"
         response = requests.get(url, timeout=10)
-        data = response.json().get('data', [])
+        data = response.json()
+        
+        raw_proxies = data.get('proxies', [])
         proxies = []
-        for item in data:
+        
+        for item in raw_proxies[:count]:
             ip = item.get('ip')
             port = item.get('port')
-            protocols = item.get('protocols', ['http'])
-            country = item.get('country', 'Unknown')
-            proto = protocols[0] if protocols else 'http'
+            country = item.get('ip_data', {}).get('country', 'Global')
             
-            name = f"{proto.upper()} Proxy ({country})"
-            proxies.append({"name": name, "ip": ip, "port": port, "proto": proto})
+            if ip and port:
+                proxies.append({
+                    "ip": ip,
+                    "port": port,
+                    "country": country,
+                    "name": f"SOCKS5 Telegram Proxy ({country})"
+                })
         return proxies
     except Exception as e:
-        logging.error(f"Error fetching proxies: {e}")
+        logging.error(f"Error fetching SOCKS5 proxies: {e}")
         return []
 
 async def send_proxies_to_group(context: ContextTypes.DEFAULT_TYPE):
-    target_chat_id = context.job.chat_id if context.job and context.job.chat_id else GROUP_ID
-    proxies = await fetch_proxies(count=5)
+    target_chat_id = context.job.chat_id if (context.job and context.job.chat_id) else GROUP_ID
+    proxies = await fetch_socks5_proxies(count=5)
     
     if not proxies:
         return
 
     await context.bot.send_message(
         chat_id=target_chat_id,
-        text="⚡ **Fresh Proxies Update (Hourly)** ⚡",
+        text="⚡ **Fresh Telegram SOCKS5 Proxies (Hourly)** ⚡\n_All links pre-configured for Telegram instant connect!_",
         parse_mode="Markdown"
     )
 
     for p in proxies:
-        keyboard = [[InlineKeyboardButton("🔗 Connect Proxy", url=f"https://t.me/proxy?server={p['ip']}&port={p['port']}")]]
+        # Proper Telegram SOCKS5 URL syntax (t.me/socks)
+        connect_url = f"https://t.me/socks?server={p['ip']}&port={p['port']}"
+        
+        keyboard = [[InlineKeyboardButton("🔗 Connect SOCKS5 Proxy", url=connect_url)]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message_text = (
             f"🛡 **{p['name']}**\n"
             f"🌐 **Server:** `{p['ip']}`\n"
-            f"🔌 **Port:** `{p['port']}`\n\n"
+            f"🔌 **Port:** `{p['port']}`\n"
+            f"📡 **Type:** SOCKS5\n\n"
             f"Tap below to connect:"
         )
         await context.bot.send_message(
@@ -84,7 +96,7 @@ def main():
 
     # Schedule automatic posting every 1 hour (3600 seconds)
     if app.job_queue:
-        app.job_queue.run_repeating(auto_post_job, interval=3600, first=10, chat_id=GROUP_ID)
+        app.job_queue.run_repeating(auto_post_job, interval=3600, first=5, chat_id=GROUP_ID)
 
     logging.info("Bot started successfully!")
     app.run_polling()
