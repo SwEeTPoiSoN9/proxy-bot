@@ -5,9 +5,10 @@ from datetime import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# Safely load configuration from Railway variables
+# Safe configuration with a built-in fallback so it never crashes
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-GROUP_ID = int(os.getenv("GROUP_ID"))
+group_id_str = os.getenv("GROUP_ID")
+GROUP_ID = int(group_id_str) if group_id_str else -1004315498301
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
