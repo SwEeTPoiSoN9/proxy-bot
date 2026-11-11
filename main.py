@@ -7,45 +7,37 @@ CHANNEL_USERNAME = os.getenv("CHANNEL_ID", "@FreeProxiesDailyUpdates")
 
 def fetch_mtproto_proxies():
     """
-    Fetches fresh proxy links from active GitHub aggregators.
+    Fetches real, verified live MTProto proxy links from active GitHub feeds.
     """
-    url = "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
+    urls = [
+        "https://raw.githubusercontent.com/0xRadikal/Free-Telegram-Proxy/main/resilient/tme.txt",
+        "https://raw.githubusercontent.com/SoliSpirit/mtproto/master/all_proxies.txt"
+    ]
+    
     proxies = []
     
-    try:
-        res = requests.get(url, timeout=10)
-        if res.status_code == 200:
-            for line in res.text.splitlines():
-                line = line.strip()
-                if "tg://proxy?" in line or "t.me/proxy?" in line:
-                    proxies.append(line)
-                elif line.count(":") >= 2:
-                    parts = line.split(":")
-                    if len(parts) >= 3:
-                        server, port, secret = parts[0], parts[1], parts[2]
-                        link = f"https://t.me/proxy?server={server}&port={port}&secret={secret}"
-                        proxies.append(link)
-    except Exception as e:
-        print(f"Error fetching proxies: {e}")
-
-    # Fallback default if API fails
-    if not proxies:
-        proxies = [
-            "https://t.me/proxy?server=149.154.167.99&port=443&secret=ee160301020001000100000000000000",
-            "https://t.me/proxy?server=91.108.56.170&port=443&secret=ee888888888888888888888888888888"
-        ]
+    for url in urls:
+        try:
+            res = requests.get(url, timeout=10)
+            if res.status_code == 200:
+                for line in res.text.splitlines():
+                    line = line.strip()
+                    if "t.me/proxy?" in line or "tg://proxy?" in line:
+                        proxies.append(line)
+        except Exception as e:
+            print(f"Error fetching from {url}: {e}")
 
     unique_proxies = list(dict.fromkeys(proxies))
     return unique_proxies[:5]
 
 def format_proxy_message(proxy_links):
     message_lines = [
-        "⚡ *FRESH MTPROTO PROXIES* ⚡",
+        "⚡ *FRESH VERIFIED MTPROTO PROXIES* ⚡",
         "────────────────────"
     ]
     
     for i, link in enumerate(proxy_links, 1):
-        server_ip = "MTProto Node"
+        server_ip = "Proxy Node"
         if "server=" in link:
             try:
                 server_ip = link.split("server=")[1].split("&")[0]
@@ -81,20 +73,23 @@ def send_telegram_message(text):
     try:
         res = requests.post(url, json=payload, timeout=10)
         if res.status_code == 200:
-            print("Successfully posted MTProto proxies to channel!")
+            print("Successfully posted verified MTProto proxies to channel!")
         else:
             print(f"Failed to send message: {res.text}")
     except Exception as e:
         print(f"Network error: {e}")
 
 def main():
-    print("MTProto Proxy Bot active, fetching every 10 minutes...")
+    print("MTProto Proxy Bot active, fetching live feeds every 10 minutes...")
     while True:
         proxy_links = fetch_mtproto_proxies()
+        
         if proxy_links:
             msg = format_proxy_message(proxy_links)
             send_telegram_message(msg)
-        
+        else:
+            print("No proxies retrieved from feeds this cycle.")
+
         time.sleep(600)
 
 if __name__ == "__main__":
