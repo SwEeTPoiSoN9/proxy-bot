@@ -10,7 +10,6 @@ def fetch_mtproto_proxies():
     Fetches raw MTProto proxy lists from active public sources.
     Parses server, port, and secret to build Telegram deep links.
     """
-    # Public sources aggregating working Telegram MTProto proxies
     urls = [
         "https://raw.githubusercontent.com/Hooker-S/MTProto-Proxy/main/mtproto.txt",
         "https://raw.githubusercontent.com/hookzof/socks5_list/master/proxy.txt"
@@ -25,7 +24,6 @@ def fetch_mtproto_proxies():
                 lines = res.text.splitlines()
                 for line in lines:
                     line = line.strip()
-                    # Filter for tg://proxy links or server:port:secret formats
                     if "tg://proxy?" in line or "t.me/proxy?" in line:
                         proxies.append(line)
                     elif line.count(":") == 2:
@@ -36,7 +34,6 @@ def fetch_mtproto_proxies():
         except Exception as e:
             print(f"Error fetching from {url}: {e}")
 
-    # Return top 5 unique proxies
     unique_proxies = list(dict.fromkeys(proxies))
     return unique_proxies[:5]
 
@@ -50,12 +47,11 @@ def format_proxy_message(proxy_links):
     ]
     
     for i, link in enumerate(proxy_links, 1):
-        # Extract server for display
         server_ip = "Active Server"
         if "server=" in link:
             try:
                 server_ip = link.split("server=")[1].split("&")[0]
-            except IndexingError:
+            except Exception:
                 pass
                 
         message_lines.append(
@@ -65,7 +61,7 @@ def format_proxy_message(proxy_links):
         )
         
     message_lines.append("────────────────────")
-    message_lines.append("⏱ *Updated every 30 minutes*")
+    message_lines.append("⏱ *Updated every 10 minutes*")
     message_lines.append("📢 *Channel:* @FreeProxiesDailyUpdates")
     message_lines.append("💼 *Support (ERC20/BSC):*\n`0x327bd2c712a13cf19c0ae63814bdb27664e9933c`")
     
@@ -94,7 +90,7 @@ def send_telegram_message(text):
         print(f"Network error: {e}")
 
 def main():
-    print("MTProto Proxy Bot active. Fetching every 30 minutes...")
+    print("MTProto Proxy Bot active. Fetching every 10 minutes...")
     while True:
         proxy_links = fetch_mtproto_proxies()
         
@@ -104,8 +100,8 @@ def main():
         else:
             print("No fresh MTProto proxies found this cycle.")
 
-        # Sleep for 30 minutes (1800 seconds)
-        time.sleep(1800)
+        # Sleep for 10 minutes (600 seconds)
+        time.sleep(600)
 
 if __name__ == "__main__":
     main()
