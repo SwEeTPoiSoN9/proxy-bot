@@ -13,12 +13,12 @@ group_id_str = os.getenv("GROUP_ID")
 GROUP_ID = int(group_id_str) if group_id_str else -1004315498301
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Hello! I am your Proxy Bot. Use /proxy to get fresh proxies with connection buttons!")
+    await update.message.reply_text("👋 Hello! I am your Proxy Bot. I automatically share fresh proxies in the group every hour!")
 
-async def get_proxy_data():
-    # Fetching free proxies (Example API or source)
+async def fetch_proxies(count=5):
     try:
-        response = requests.get("https://proxylist.geonode.com/api/proxy-list?limit=3&page=1&sort_by=lastChecked&sort_type=desc", timeout=10)
+        url = f"https://proxylist.geonode.com/api/proxy-list?limit={count}&page=1&sort_by=lastChecked&sort_type=desc"
+        response = requests.get(url, timeout=10)
         data = response.json().get('data', [])
         proxies = []
         for item in data:
@@ -28,34 +28,48 @@ async def get_proxy_data():
             country = item.get('country', 'Unknown')
             proto = protocols[0] if protocols else 'http'
             
-            # Format proxy link/details
-            proxy_url = f"{proto}://{ip}:{port}"
             name = f"{proto.upper()} Proxy ({country})"
-            proxies.append({"name": name, "url": proxy_url, "ip": ip, "port": port})
+            proxies.append({"name": name, "ip": ip, "port": port, "proto": proto})
         return proxies
     except Exception as e:
         logging.error(f"Error fetching proxies: {e}")
         return []
 
-async def proxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    proxies = await get_proxy_data()
+async def send_proxies_to_group(context: ContextTypes.DEFAULT_TYPE):
+    target_chat_id = context.job.chat_id if context.job and context.job.chat_id else GROUP_ID
+    proxies = await fetch_proxies(count=5)
+    
     if not proxies:
-        await update.message.reply_text("❌ Could not fetch proxies at the moment. Please try again later.")
         return
 
+    await context.bot.send_message(
+        chat_id=target_chat_id,
+        text="⚡ **Fresh Proxies Update (Hourly)** ⚡",
+        parse_mode="Markdown"
+    )
+
     for p in proxies:
-        # Create an inline button to connect/open the proxy directly
         keyboard = [[InlineKeyboardButton("🔗 Connect Proxy", url=f"https://t.me/proxy?server={p['ip']}&port={p['port']}")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message_text = (
-            f"🛡 **{p['name']}**\n\n"
+            f"🛡 **{p['name']}**\n"
             f"🌐 **Server:** `{p['ip']}`\n"
             f"🔌 **Port:** `{p['port']}`\n\n"
-            f"Tap the button below to connect instantly:"
+            f"Tap below to connect:"
         )
-        
-        await update.message.reply_text(message_text, reply_markup=reply_markup, parse_mode="Markdown")
+        await context.bot.send_message(
+            chat_id=target_chat_id,
+            text=message_text,
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+
+async def auto_post_job(context: ContextTypes.DEFAULT_TYPE):
+    await send_proxies_to_group(context)
+
+async def proxy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_proxies_to_group(context)
 
 def main():
     if not BOT_TOKEN:
@@ -64,10 +78,15 @@ def main():
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    # Handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("proxy", proxy_command))
 
-    logging.info("Bot is starting...")
+    # Schedule automatic posting every 1 hour (3600 seconds)
+    if app.job_queue:
+        app.job_queue.run_repeating(auto_post_job, interval=3600, first=10, chat_id=GROUP_ID)
+
+    logging.info("Bot started successfully!")
     app.run_polling()
 
 if __name__ == '__main__':
