@@ -13,62 +13,68 @@ group_id_str = os.getenv("GROUP_ID")
 GROUP_ID = int(group_id_str) if group_id_str else -1004315498301
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Hello! I send live, verified Telegram SOCKS5 proxies every hour!")
+    await update.message.reply_text("👋 Hello! I send low-ping Telegram MTProto proxies every hour!")
 
-async def fetch_socks5_proxies(count=5):
-    """Fetches high-quality SOCKS5 proxies explicitly formatted for Telegram."""
+async def fetch_mtproto_proxies(count=5):
+    """Fetches fast, low-latency MTProto proxies specifically optimized for Telegram."""
     try:
-        # Fetching verified SOCKS5 proxies from ProxyScrape API
-        url = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=json&protocol=socks5"
+        # Pushes fresh MTProto list from Telegram proxy providers
+        url = "https://raw.githubusercontent.com/SoliSpirit/mtproto/main/all_proxies.txt"
         response = requests.get(url, timeout=10)
-        data = response.json()
+        lines = [line.strip() for line in response.text.splitlines() if line.strip().startswith("tg://proxy")]
         
-        raw_proxies = data.get('proxies', [])
         proxies = []
-        
-        for item in raw_proxies[:count]:
-            ip = item.get('ip')
-            port = item.get('port')
-            country = item.get('ip_data', {}).get('country', 'Global')
+        for line in lines[:count]:
+            # Parsing tg://proxy?server=IP&port=PORT&secret=SECRET
+            params = {}
+            query_str = line.split("?")[1] if "?" in line else ""
+            for pair in query_str.split("&"):
+                if "=" in pair:
+                    k, v = pair.split("=", 1)
+                    params[k] = v
             
-            if ip and port:
+            server = params.get("server")
+            port = params.get("port")
+            secret = params.get("secret")
+            
+            if server and port and secret:
                 proxies.append({
-                    "ip": ip,
+                    "server": server,
                     "port": port,
-                    "country": country,
-                    "name": f"SOCKS5 Telegram Proxy ({country})"
+                    "secret": secret,
+                    "raw_link": line
                 })
         return proxies
     except Exception as e:
-        logging.error(f"Error fetching SOCKS5 proxies: {e}")
+        logging.error(f"Error fetching MTProto proxies: {e}")
         return []
 
 async def send_proxies_to_group(context: ContextTypes.DEFAULT_TYPE):
     target_chat_id = context.job.chat_id if (context.job and context.job.chat_id) else GROUP_ID
-    proxies = await fetch_socks5_proxies(count=5)
+    proxies = await fetch_mtproto_proxies(count=5)
     
     if not proxies:
         return
 
     await context.bot.send_message(
         chat_id=target_chat_id,
-        text="⚡ **Fresh Telegram SOCKS5 Proxies (Hourly)** ⚡\n_All links pre-configured for Telegram instant connect!_",
+        text="🚀 **Fast MTProto Telegram Proxies (Low Ping)** 🚀\n_Native FakeTLS proxies for instant connection speed._",
         parse_mode="Markdown"
     )
 
-    for p in proxies:
-        # Proper Telegram SOCKS5 URL syntax (t.me/socks)
-        connect_url = f"https://t.me/socks?server={p['ip']}&port={p['port']}"
+    for idx, p in enumerate(proxies, 1):
+        # Web fallback link for mobile/desktop button actions
+        web_link = f"https://t.me/proxy?server={p['server']}&port={p['port']}&secret={p['secret']}"
         
-        keyboard = [[InlineKeyboardButton("🔗 Connect SOCKS5 Proxy", url=connect_url)]]
+        keyboard = [[InlineKeyboardButton("⚡ Connect Fast MTProto", url=web_link)]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message_text = (
-            f"🛡 **{p['name']}**\n"
-            f"🌐 **Server:** `{p['ip']}`\n"
+            f"⚡ **MTProto Proxy #{idx}**\n"
+            f"🌐 **Server:** `{p['server']}`\n"
             f"🔌 **Port:** `{p['port']}`\n"
-            f"📡 **Type:** SOCKS5\n\n"
-            f"Tap below to connect:"
+            f"🔑 **Secret:** `{p['secret'][:10]}...`\n\n"
+            f"Tap below for instant low-ping connection:"
         )
         await context.bot.send_message(
             chat_id=target_chat_id,
